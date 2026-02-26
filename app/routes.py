@@ -87,15 +87,29 @@ def create_certificate_request():
     payload = request.get_json(silent=True) or {}
     requester_uuid = payload.get("uuid", "").strip()
     anydesk = payload.get("anydesk", "").strip()
+    country = (payload.get("country") or "").strip() or None
+    city = (payload.get("city") or "").strip() or None
+    latitude = payload.get("lat")
+    longitude = payload.get("lon")
 
     if not requester_uuid or not anydesk:
         return jsonify({"error": "uuid_and_anydesk_are_required"}), 400
+
+    try:
+        latitude = float(latitude) if latitude is not None and str(latitude).strip() != "" else None
+        longitude = float(longitude) if longitude is not None and str(longitude).strip() != "" else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_coordinates", "message": "lat/lon must be numeric"}), 400
 
     reference_id = uuid4().hex
     cert_request = CertificateRequest(
         reference_id=reference_id,
         requester_uuid=requester_uuid,
         anydesk=anydesk,
+        country=country,
+        city=city,
+        latitude=latitude,
+        longitude=longitude,
         status=CertificateRequest.STATUS_PENDING,
         requested_by_user_id=current_user.id,
     )
@@ -109,6 +123,9 @@ def create_certificate_request():
             f"Reference ID: {reference_id}\n"
             f"UUID: {requester_uuid}\n"
             f"AnyDesk: {anydesk}\n"
+            f"Country: {country or 'n/a'}\n"
+            f"City: {city or 'n/a'}\n"
+            f"Coordinates: {latitude if latitude is not None else 'n/a'}, {longitude if longitude is not None else 'n/a'}\n"
             f"Requested by: {current_user.username}\n"
         ),
     )
@@ -149,6 +166,10 @@ def list_requests():
             "reference_id": item.reference_id,
             "uuid": item.requester_uuid,
             "anydesk": item.anydesk,
+            "country": item.country,
+            "city": item.city,
+            "lat": item.latitude,
+            "lon": item.longitude,
             "status": item.status,
             "refusal_reason": item.refusal_reason,
             "requested_by": item.requested_by.username if item.requested_by else None,

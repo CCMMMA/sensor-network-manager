@@ -56,6 +56,7 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        ensure_certificate_request_columns()
         seed_defaults()
 
     return app
@@ -87,3 +88,29 @@ def seed_defaults():
         db.session.add(admin)
 
     db.session.commit()
+
+
+def ensure_certificate_request_columns():
+    # Lightweight SQLite-compatible migration for newly introduced optional fields.
+    inspector = db.inspect(db.engine)
+    table_names = inspector.get_table_names()
+    if "certificate_requests" not in table_names:
+        return
+
+    existing = {col["name"] for col in inspector.get_columns("certificate_requests")}
+    alter_statements = []
+    if "country" not in existing:
+        alter_statements.append("ALTER TABLE certificate_requests ADD COLUMN country VARCHAR(128)")
+    if "city" not in existing:
+        alter_statements.append("ALTER TABLE certificate_requests ADD COLUMN city VARCHAR(128)")
+    if "latitude" not in existing:
+        alter_statements.append("ALTER TABLE certificate_requests ADD COLUMN latitude FLOAT")
+    if "longitude" not in existing:
+        alter_statements.append("ALTER TABLE certificate_requests ADD COLUMN longitude FLOAT")
+
+    if not alter_statements:
+        return
+
+    with db.engine.begin() as conn:
+        for stmt in alter_statements:
+            conn.exec_driver_sql(stmt)
